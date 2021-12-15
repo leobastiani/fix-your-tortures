@@ -1,0 +1,6 @@
+*
+!package.json
+!yarn.lock
+!package-lock.json
+!lib
+!README.md
