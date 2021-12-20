@@ -1,27 +1,31 @@
-import { FixtureCache, FixtureDictionary, FixtureRequester, inc } from "./";
-import { FixtureGetter } from "./index";
+import {
+  FixtureCache,
+  FixtureDictionary,
+  FixtureGetter,
+  FixtureGraphRequester,
+  FixtureRequester,
+  inc,
+} from "./index";
 
 describe("chat with two messages and two users", () => {
   function setup(): {
     fixtureRequester: FixtureRequester;
     fixtureDictionary: FixtureDictionary;
     fixtureCache: FixtureCache;
+    fixtureGetter: FixtureGetter;
+    fixtureGraphRequester: FixtureGraphRequester;
   } {
     const fixtureDictionary = new FixtureDictionary();
-
     interface User {
       username: string;
       password: string;
     }
-
     interface Message {
       from: User;
       to: User;
       content: string;
     }
-
     const defaultUsername = inc((i) => `username${i}`);
-
     const userFactory = ({
       username = defaultUsername(),
       password = "123456",
@@ -29,7 +33,6 @@ describe("chat with two messages and two users", () => {
       username,
       password,
     });
-
     const messageFactory = ({
       fixtures,
       from = fixtures.with("user"),
@@ -45,23 +48,28 @@ describe("chat with two messages and two users", () => {
       to,
       content,
     });
-
     fixtureDictionary.define("user", {
       factory: userFactory,
       key: "username",
     });
-
     fixtureDictionary.define("message", {
       factory: messageFactory,
     });
-
     const fixtureCache = new FixtureCache();
-
+    const fixtureGraphRequester = new FixtureGraphRequester();
     const fixtureRequester = new FixtureRequester(
       fixtureDictionary,
-      fixtureCache
+      fixtureCache,
+      fixtureGraphRequester
     );
-    return { fixtureRequester, fixtureDictionary, fixtureCache };
+    const fixtureGetter = new FixtureGetter(fixtureDictionary, fixtureCache);
+    return {
+      fixtureRequester,
+      fixtureDictionary,
+      fixtureCache,
+      fixtureGetter,
+      fixtureGraphRequester,
+    };
   }
 
   it("can be declared with only two messages", () => {
@@ -80,10 +88,9 @@ describe("chat with two messages and two users", () => {
   });
 
   it("can declare a message and then get fixtures by destruturing array", () => {
-    const { fixtureRequester, fixtureCache, fixtureDictionary } = setup();
+    const { fixtureRequester, fixtureGetter } = setup();
 
     fixtureRequester.with("message", { content: "Hi" });
-    const fixtureGetter = new FixtureGetter(fixtureDictionary, fixtureCache);
     const [userFrom, userTo] = fixtureGetter.get("user");
     const { username0, username1 } = fixtureGetter.get("user");
     const [message] = fixtureGetter.get("message");
@@ -92,5 +99,26 @@ describe("chat with two messages and two users", () => {
     expect(message.from).toBe(userFrom);
     expect(message.to).toBe(userTo);
     expect(message.content).toBe("Hi");
+  });
+
+  it("has proper build order with two messages", () => {
+    const { fixtureRequester, fixtureGetter, fixtureGraphRequester } = setup();
+
+    fixtureRequester.with("message", { content: "Hi" });
+    fixtureRequester.with("message", { content: "Hello" });
+    const [userFrom, userTo] = fixtureGetter.get("user");
+    const messages = fixtureGetter.get("message");
+    expect(fixtureGraphRequester.toBuild.map((data) => data.name)).toEqual([
+      "user",
+      "user",
+      "message",
+      "message",
+    ]);
+
+    expect(fixtureGraphRequester.toBuild.map((data) => data.data)).toEqual([
+      userFrom,
+      userTo,
+      ...messages,
+    ]);
   });
 });

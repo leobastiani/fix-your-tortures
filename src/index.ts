@@ -26,6 +26,18 @@ export class FixtureCache {
   public map = _.memoize((_: string) => new Map<any, any>());
 }
 
+export class FixtureData {
+  constructor(public readonly name: string, public readonly data: any) {}
+}
+
+export class FixtureGraphRequester {
+  toBuild = [] as FixtureData[];
+
+  with(fixtureName: string, data: any): void {
+    this.toBuild.push(new FixtureData(fixtureName, data));
+  }
+}
+
 export class FixtureRequester {
   indexCounter = _.memoize((_: string) => ({
     index: 0,
@@ -37,7 +49,8 @@ export class FixtureRequester {
 
   constructor(
     private readonly fixtureDictionary: FixtureDictionary,
-    private readonly fixtureCache: FixtureCache
+    private readonly fixtureCache: FixtureCache,
+    private readonly fixtureGraphRequester: FixtureGraphRequester
   ) {}
 
   with(fixtureName: string, options: any = {}): any {
@@ -57,8 +70,13 @@ export class FixtureRequester {
     }
     const ret = factory({
       ...options,
-      fixtures: new FixtureRequester(this.fixtureDictionary, this.fixtureCache),
+      fixtures: new FixtureRequester(
+        this.fixtureDictionary,
+        this.fixtureCache,
+        this.fixtureGraphRequester
+      ),
     });
+    this.fixtureGraphRequester.with(fixtureName, ret);
     this.fixtureCache.map(fixtureName).set(keyValue, ret);
     return ret;
   }
