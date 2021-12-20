@@ -38,8 +38,8 @@ export class FixtureGraphRequester {
   }
 }
 
-export class FixtureRequester {
-  indexCounter = _.memoize((_: string) => ({
+export class FixtureIndexCounter {
+  indexCounter = _.memoize((_fixtureName: string) => ({
     index: 0,
   }));
 
@@ -47,14 +47,21 @@ export class FixtureRequester {
     return this.indexCounter(fixtureName).index++;
   }
 
+  mutateOptions<T>(fixtureName: string, options: T): void {
+    _.defaults(options, { index: this.getNewIndex(fixtureName) });
+  }
+}
+
+export class FixtureRequester {
   constructor(
     private readonly fixtureDictionary: FixtureDictionary,
+    private readonly localFixtureIndexCounter: FixtureIndexCounter,
+    private readonly globalFixtureIndexCounter: FixtureIndexCounter,
     private readonly fixtureCache: FixtureCache,
     private readonly fixtureGraphRequester: FixtureGraphRequester
   ) {}
 
-  with(fixtureName: string, options: any = {}): any {
-    Object.assign(options, { index: this.getNewIndex(fixtureName) });
+  private addFixture(fixtureName: string, options: any = {}): any {
     const fixtureDefinition =
       this.fixtureDictionary.definedFixtures.get(fixtureName);
     const { factory } = fixtureDefinition;
@@ -68,10 +75,13 @@ export class FixtureRequester {
     if (!_.isNil(cached)) {
       return cached;
     }
+    this.globalFixtureIndexCounter.mutateOptions(fixtureName, options);
     const ret = factory({
       ...options,
       fixtures: new FixtureRequester(
         this.fixtureDictionary,
+        new FixtureIndexCounter(),
+        this.globalFixtureIndexCounter,
         this.fixtureCache,
         this.fixtureGraphRequester
       ),
@@ -79,6 +89,16 @@ export class FixtureRequester {
     this.fixtureGraphRequester.with(fixtureName, ret);
     this.fixtureCache.map(fixtureName).set(keyValue, ret);
     return ret;
+  }
+
+  with(fixtureName: string, options: any = {}): any {
+    this.localFixtureIndexCounter.mutateOptions(fixtureName, options);
+    return this.addFixture(fixtureName, options);
+  }
+
+  create(fixtureName: string, options: any = {}): any {
+    this.globalFixtureIndexCounter.mutateOptions(fixtureName, options);
+    return this.addFixture(fixtureName, options);
   }
 }
 

@@ -3,8 +3,8 @@ import {
   FixtureDictionary,
   FixtureGetter,
   FixtureGraphRequester,
+  FixtureIndexCounter,
   FixtureRequester,
-  inc,
 } from "./index";
 
 describe("chat with two messages and two users", () => {
@@ -25,11 +25,11 @@ describe("chat with two messages and two users", () => {
       to: User;
       content: string;
     }
-    const defaultUsername = inc((i) => `username${i}`);
     const userFactory = ({
-      username = defaultUsername(),
+      index = 0,
+      username = `username${index}`,
       password = "123456",
-    }: Partial<User> = {}): User => ({
+    }: Partial<User> & { index?: number } = {}): User => ({
       username,
       password,
     });
@@ -59,6 +59,8 @@ describe("chat with two messages and two users", () => {
     const fixtureGraphRequester = new FixtureGraphRequester();
     const fixtureRequester = new FixtureRequester(
       fixtureDictionary,
+      new FixtureIndexCounter(),
+      new FixtureIndexCounter(),
       fixtureCache,
       fixtureGraphRequester
     );
@@ -101,11 +103,16 @@ describe("chat with two messages and two users", () => {
     expect(message.content).toBe("Hi");
   });
 
-  it("has proper build order with two messages", () => {
+  it("has proper build order with two messages and two users", () => {
     const { fixtureRequester, fixtureGetter, fixtureGraphRequester } = setup();
 
     fixtureRequester.with("message", { content: "Hi" });
     fixtureRequester.with("message", { content: "Hello" });
+
+    // these two users are going to be added before the first message
+    fixtureRequester.with("user");
+    fixtureRequester.with("user");
+
     const [userFrom, userTo] = fixtureGetter.get("user");
     const messages = fixtureGetter.get("message");
     expect(fixtureGraphRequester.toBuild.map((data) => data.name)).toEqual([
@@ -114,11 +121,34 @@ describe("chat with two messages and two users", () => {
       "message",
       "message",
     ]);
-
     expect(fixtureGraphRequester.toBuild.map((data) => data.data)).toEqual([
       userFrom,
       userTo,
       ...messages,
     ]);
+  });
+
+  it("has proper build order with two messages and one user at the end", () => {
+    const { fixtureRequester, fixtureGetter, fixtureGraphRequester } = setup();
+
+    fixtureRequester.with("message", { content: "Hi" });
+    fixtureRequester.with("message", { content: "Hello" });
+    fixtureRequester.create("user");
+    const [userFrom, userTo, userLastAdded] = fixtureGetter.get("user");
+    const messages = fixtureGetter.get("message");
+    expect(fixtureGraphRequester.toBuild.map((data) => data.name)).toEqual([
+      "user",
+      "user",
+      "message",
+      "message",
+      "user",
+    ]);
+    expect(fixtureGraphRequester.toBuild.map((data) => data.data)).toEqual([
+      userFrom,
+      userTo,
+      ...messages,
+      userLastAdded,
+    ]);
+    expect(userLastAdded.username).toBe("username2");
   });
 });
