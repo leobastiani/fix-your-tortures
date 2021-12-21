@@ -91,6 +91,7 @@
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
   "exclude": [
+    "__mocks__",
     "node_modules",
     "./lib",
     "**/*.test.ts"
