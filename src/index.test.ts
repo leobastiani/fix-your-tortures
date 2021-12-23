@@ -35,8 +35,8 @@ describe("chat with two messages and two users", () => {
     });
     const messageFactory = ({
       fixtures,
-      from = fixtures.with("user"),
-      to = fixtures.with("user"),
+      from,
+      to,
       content,
     }: {
       fixtures?: any;
@@ -44,8 +44,8 @@ describe("chat with two messages and two users", () => {
       to?: User;
       content: string;
     }): Message => ({
-      from,
-      to,
+      from: fixtures.with("user", from),
+      to: fixtures.with("user", to),
       content,
     });
     fixtureDictionary.define("user", {
@@ -101,6 +101,41 @@ describe("chat with two messages and two users", () => {
     expect(message.from).toBe(userFrom);
     expect(message.to).toBe(userTo);
     expect(message.content).toBe("Hi");
+  });
+
+  it("has one message with a different userFrom", () => {
+    const { fixtureRequester, fixtureGraphRequester } = setup();
+
+    fixtureRequester.with("message", {
+      content: "Hi",
+      from: { username: "some.username" },
+    });
+    const userFrom = {
+      username: "some.username",
+      password: "123456",
+    };
+    const userTo = {
+      username: "username1",
+      password: "123456",
+    };
+    expect(fixtureGraphRequester.toBuild).toEqual([
+      {
+        data: userFrom,
+        name: "user",
+      },
+      {
+        data: userTo,
+        name: "user",
+      },
+      {
+        data: {
+          content: "Hi",
+          from: userFrom,
+          to: userTo,
+        },
+        name: "message",
+      },
+    ]);
   });
 
   it("has proper build order with two messages and two users", () => {
