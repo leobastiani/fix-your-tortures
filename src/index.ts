@@ -2,23 +2,33 @@ import _ from "lodash";
 
 interface FixtureDefinition<FactoryInput, FactoryResult> {
   factory: (factoryInput: FactoryInput) => FactoryResult;
-  key?: string;
+  key: string;
 }
 
 export class FixtureDictionary {
-  public definedFixtures = new Map<string, any>();
+  public readonly definedFixtures = new Map<string, any>();
+  public readonly fixtureKey: FixtureKey;
+
+  constructor() {
+    this.fixtureKey = new FixtureKey(this);
+  }
 
   define<FactoryInput, FactoryResult>(
     fixtureName: string,
     {
       factory,
       key = "index",
-    }: FixtureDefinition<FactoryInput, FactoryResult> & { key?: string }
+    }: Omit<FixtureDefinition<FactoryInput, FactoryResult>, "key"> &
+      Partial<Pick<FixtureDefinition<FactoryInput, FactoryResult>, "key">>
   ): void {
     this.definedFixtures.set(fixtureName, {
       factory,
       key,
     });
+  }
+
+  factory(fixtureName: string): any {
+    return this.definedFixtures.get(fixtureName).factory;
   }
 }
 
@@ -52,6 +62,22 @@ export class FixtureIndexCounter {
   }
 }
 
+export class FixtureKey {
+  constructor(private readonly fixtureDictionary: FixtureDictionary) {}
+
+  get(fixtureName: string, options: any = {}): { key: string; value: any } {
+    const fixtureDefinition =
+      this.fixtureDictionary.definedFixtures.get(fixtureName);
+    let { key } = fixtureDefinition;
+    let value = _.get(options, key);
+    if (value === undefined) {
+      key = "index";
+      value = options.index;
+    }
+    return { key, value };
+  }
+}
+
 export class FixtureRequester {
   constructor(
     private readonly fixtureDictionary: FixtureDictionary,
@@ -62,20 +88,16 @@ export class FixtureRequester {
   ) {}
 
   private addFixture(fixtureName: string, options: any = {}): any {
-    const fixtureDefinition =
-      this.fixtureDictionary.definedFixtures.get(fixtureName);
-    const { factory } = fixtureDefinition;
-    let { key } = fixtureDefinition;
-    let keyValue = _.get(options, key);
-    if (keyValue === undefined) {
-      key = "index";
-      keyValue = options.index;
-    }
+    const { value: keyValue } = this.fixtureDictionary.fixtureKey.get(
+      fixtureName,
+      options
+    );
     const cached = this.fixtureCache.map(fixtureName).get(keyValue);
     if (!_.isNil(cached)) {
       return cached;
     }
     this.globalFixtureIndexCounter.mutateOptions(fixtureName, options);
+    const factory = this.fixtureDictionary.factory(fixtureName);
     const ret = factory({
       ...options,
       fixtures: new FixtureRequester(
